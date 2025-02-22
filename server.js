@@ -91,6 +91,41 @@ app.delete("/delete-fingerprint/:id", async (req, res) => {
     res.status(500).json({ message: "Error al eliminar huella" });
   }
 });
+// Nueva ruta para iniciar el enrolamiento
+app.post("/start-enroll", async (req, res) => {
+  try {
+    io.emit("start-enroll"); // Notifica al ESP32 para iniciar el enrolamiento
+    res.json({ message: "Esperando huella..." });
+  } catch (err) {
+    console.error("Error al iniciar enrolamiento:", err);
+    res.status(500).json({ message: "Error en el servidor" });
+  }
+});
+
+// WebSocket para recibir confirmación del ESP32
+io.on("connection", (socket) => {
+  console.log("Cliente conectado a WebSockets");
+
+  socket.on("fingerprint-saved", async (data) => {
+    console.log("Huella registrada:", data);
+
+    try {
+      await client.query(
+        "INSERT INTO fingerregister.users (name, fingerprint_id) VALUES ($1, $2)",
+        [data.name, data.fingerprintId]
+      );
+      io.emit("fingerprint-registered", { message: "Huella registrada con éxito" });
+    } catch (err) {
+      console.error("Error al guardar en la base de datos:", err);
+      io.emit("fingerprint-registered", { message: "Error al registrar huella" });
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Cliente desconectado");
+  });
+});
+
 
 // Manejo de WebSockets
 io.on("connection", (socket) => {
