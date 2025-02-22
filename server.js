@@ -49,7 +49,22 @@ app.post('/register-user', async (req, res) => {
       res.status(500).json({ message: 'Error al registrar usuario' });
     }
 });
-  
+
+app.delete('/delete-fingerprint/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+      const result = await client.query('DELETE FROM fingerregister.users WHERE fingerprint_id = $1', [id]);
+
+      if (result.rowCount > 0) {
+          res.json({ message: `Huella con ID ${id} eliminada con éxito` });
+      } else {
+          res.status(404).json({ message: 'Huella no encontrada' });
+      }
+  } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Error al eliminar huella' });
+  }
+});
 
 // Iniciar el servidor
 app.listen(port, () => {
