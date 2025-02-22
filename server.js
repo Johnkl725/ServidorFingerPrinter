@@ -13,6 +13,8 @@ const io = new Server(server, {
     origin: "*",
     methods: ["GET", "POST"],
   },
+  pingInterval: 25000, // Evita que Render cierre la conexión
+  pingTimeout: 60000, // Aumenta el tiempo de espera para evitar desconexiones
 });
 
 const port = process.env.PORT || 3000;
