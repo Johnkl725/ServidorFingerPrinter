@@ -127,15 +127,6 @@ io.on("connection", (socket) => {
 });
 
 
-// Manejo de WebSockets
-io.on("connection", (socket) => {
-  console.log("Cliente conectado a WebSockets");
-
-  socket.on("disconnect", () => {
-    console.log("Cliente desconectado");
-  });
-});
-
 // Iniciar el servidor
 server.listen(port, () => {
   console.log(`Servidor corriendo en http://localhost:${port}`);
