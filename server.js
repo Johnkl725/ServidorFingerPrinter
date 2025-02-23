@@ -36,10 +36,33 @@ client
   .then(() => console.log("Conectado a PostgreSQL en la nube"))
   .catch((err) => console.error("Error de conexión", err.stack));
 
-  app.get('/get-action', (req, res) => {
-    // Lógica para determinar la acción (puede venir del frontend)
-    res.json({ action: "none" }); // "enroll", "verify", "delete" con "id" si aplica
+
+  // Variable para almacenar la acción pendiente
+let pendingAction = { action: "none" };
+
+// Ruta para establecer la acción desde el frontend
+app.post('/set-action', (req, res) => {
+    const { action, id } = req.body;
+    console.log(`[SERVER DEBUG] Recibida solicitud en /set-action: ${JSON.stringify(req.body)}`);
+    if (["enroll", "verify", "delete"].includes(action)) {
+        pendingAction = { action };
+        if (action === "delete" && id) {
+            pendingAction.id = id;
+        }
+        console.log(`[SERVER DEBUG] Acción pendiente actualizada: ${JSON.stringify(pendingAction)}`);
+        res.json({ message: "Acción registrada" });
+    } else {
+        res.status(400).json({ message: "Acción inválida" });
+    }
 });
+
+// Ruta para que el Arduino consulte la acción pendiente
+app.get('/get-action', (req, res) => {
+    console.log(`[SERVER DEBUG] Arduino consultó /get-action, devolviendo: ${JSON.stringify(pendingAction)}`);
+    res.json(pendingAction);
+    pendingAction = { action: "none" }; // Resetear después de devolver
+});
+
 
 app.get('/get-next-id', async (req, res) => {
     const result = await client.query("SELECT fingerprint_id FROM fingerregister.users ORDER BY fingerprint_id");
