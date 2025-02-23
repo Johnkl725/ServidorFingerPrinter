@@ -8,20 +8,27 @@ require("dotenv").config();
 
 const app = express();
 const server = http.createServer(app);
+
+// Configuración explícita de CORS para Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: "*", // Permitir todas las conexiones (ajusta según necesidad)
+    origin: "https://vista-security-finger-app.vercel.app", // Especificar el origen exacto
     methods: ["GET", "POST"],
+    credentials: true, // Si necesitas cookies o autenticación
   },
-  pingInterval: 10000, // Enviar ping cada 10 segundos para mantener la conexión viva
-  pingTimeout: 5000,   // Esperar 5 segundos por respuesta
+  pingInterval: 10000, // Mantener conexión viva
+  pingTimeout: 5000,   // Tiempo de espera para respuesta
 });
 
 // Usar el puerto dinámico de Render
 const port = process.env.PORT || 3000;
 
-// Habilitar CORS y JSON
-app.use(cors());
+// Configuración explícita de CORS para Express
+app.use(cors({
+  origin: "https://vista-security-finger-app.vercel.app", // Especificar el origen exacto
+  methods: ["GET", "POST", "DELETE"],
+  credentials: true, // Si necesitas cookies o autenticación
+}));
 app.use(bodyParser.json());
 
 // Conexión a PostgreSQL
@@ -36,6 +43,12 @@ client
   .connect()
   .then(() => console.log("Conectado a PostgreSQL en la nube"))
   .catch((err) => console.error("Error de conexión a la base de datos:", err.stack));
+
+// Ruta básica para verificar que el servidor responde
+app.get("/", (req, res) => {
+  console.log("Solicitud GET recibida en /");
+  res.status(200).json({ message: "Servidor funcionando" });
+});
 
 // Ruta para verificar huella
 app.post("/verify-fingerprint", async (req, res) => {
@@ -114,7 +127,7 @@ app.delete("/delete-fingerprint/:id", async (req, res) => {
 app.post("/start-enroll", async (req, res) => {
   try {
     console.log("Solicitud POST recibida para iniciar enrolamiento");
-    io.emit("start-enroll"); // Notifica al ESP32 para iniciar el enrolamiento
+    io.emit("start-enroll");
     res.json({ message: "Esperando huella..." });
   } catch (err) {
     console.error("Error al iniciar enrolamiento:", err);
@@ -130,14 +143,14 @@ app.get("/get-available-id", async (req, res) => {
     const result = await client.query(
       "SELECT fingerprint_id FROM fingerregister.users ORDER BY fingerprint_id"
     );
-    
-    const usedIds = result.rows.map(row => row.fingerprint_id);
+
+    const usedIds = result.rows.map((row) => row.fingerprint_id);
     let nextId = 1;
-    
+
     while (usedIds.includes(nextId)) {
       nextId++;
     }
-    
+
     console.log(`Próximo ID disponible: ${nextId}`);
     res.json({ nextId });
   } catch (err) {
@@ -187,7 +200,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// Iniciar el servidor en el puerto dinámico
+// Iniciar el servidor
 server.listen(port, () => {
   console.log(`Servidor corriendo en puerto ${port}`);
 });
