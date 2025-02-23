@@ -81,6 +81,7 @@ app.delete("/delete-fingerprint/:id", async (req, res) => {
   try {
     const result = await client.query("DELETE FROM fingerregister.users WHERE fingerprint_id = $1", [id]);
 
+    
     if (result.rowCount > 0) {
       res.json({ message: `Huella con ID ${id} eliminada con éxito` });
     } else {
