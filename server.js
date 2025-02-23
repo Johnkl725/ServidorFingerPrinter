@@ -81,6 +81,7 @@ app.delete("/delete-fingerprint/:id", async (req, res) => {
   try {
     const result = await client.query("DELETE FROM fingerregister.users WHERE fingerprint_id = $1", [id]);
 
+    
     if (result.rowCount > 0) {
       res.json({ message: `Huella con ID ${id} eliminada con éxito` });
     } else {
@@ -114,53 +115,28 @@ app.post("/start-verify", async (req, res) => {
 
 
 // WebSocket para recibir confirmación del ESP32
-// WebSocket para recibir confirmación del ESP32
 io.on("connection", (socket) => {
-  console.log("🔗 Cliente conectado a WebSockets");
+  console.log("Cliente conectado a WebSockets");
 
-  // 📌 Recibir confirmación cuando una huella ha sido guardada
   socket.on("fingerprint-saved", async (data) => {
-    console.log("📥 Huella registrada:", data);
+    console.log("Huella registrada:", data);
 
     try {
       await client.query(
         "INSERT INTO fingerregister.users (name, fingerprint_id) VALUES ($1, $2)",
         [data.name, data.fingerprintId]
       );
-      io.emit("fingerprint-registered", { message: "Huella registrada con éxito", id: data.fingerprintId, name: data.name });
+      io.emit("fingerprint-registered", { message: "Huella registrada con éxito" });
     } catch (err) {
-      console.error("❌ Error al guardar en la base de datos:", err);
+      console.error("Error al guardar en la base de datos:", err);
       io.emit("fingerprint-registered", { message: "Error al registrar huella" });
     }
   });
 
-  // 📌 Recibir confirmación cuando una huella es verificada
-  socket.on("fingerprint-verified", async (data) => {
-    console.log("🔎 Verificación recibida:", data);
-
-    try {
-      const result = await client.query(
-        "SELECT * FROM fingerregister.users WHERE fingerprint_id = $1",
-        [data.fingerprintId]
-      );
-
-      if (result.rows.length > 0) {
-        const user = result.rows[0];
-        io.emit("fingerprint-verified", { message: "Acceso permitido", id: user.id, name: user.name });
-      } else {
-        io.emit("fingerprint-verified", { message: "Acceso denegado" });
-      }
-    } catch (err) {
-      console.error("❌ Error en la verificación:", err);
-      io.emit("fingerprint-verified", { message: "Error en la verificación" });
-    }
-  });
-
   socket.on("disconnect", () => {
-    console.log("❌ Cliente desconectado");
+    console.log("Cliente desconectado");
   });
 });
-
 
 
 // Iniciar el servidor
