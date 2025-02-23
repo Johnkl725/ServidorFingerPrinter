@@ -118,10 +118,8 @@ app.post("/start-verify", async (req, res) => {
 // WebSocket para recibir confirmación del ESP32
 io.on("connection", (socket) => {
   console.log("Cliente conectado a WebSockets");
-  console.log("Cliente conectado a WebSockets");
 
   socket.on("fingerprint-saved", async (data) => {
-    console.log("Huella registrada:", data);
     console.log("Huella registrada:", data);
 
     try {
@@ -130,16 +128,13 @@ io.on("connection", (socket) => {
         [data.name, data.fingerprintId]
       );
       io.emit("fingerprint-registered", { message: "Huella registrada con éxito" });
-      io.emit("fingerprint-registered", { message: "Huella registrada con éxito" });
     } catch (err) {
-      console.error("Error al guardar en la base de datos:", err);
       console.error("Error al guardar en la base de datos:", err);
       io.emit("fingerprint-registered", { message: "Error al registrar huella" });
     }
   });
 
   socket.on("disconnect", () => {
-    console.log("Cliente desconectado");
     console.log("Cliente desconectado");
   });
 });
