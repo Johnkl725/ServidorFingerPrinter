@@ -102,6 +102,27 @@ app.post("/start-enroll", async (req, res) => {
   }
 });
 
+// Añadir esta nueva ruta en server.js
+app.get("/get-available-id", async (req, res) => {
+  try {
+    const result = await client.query(
+      "SELECT fingerprint_id FROM fingerregister.users ORDER BY fingerprint_id"
+    );
+    
+    const usedIds = result.rows.map(row => row.fingerprint_id);
+    let nextId = 1;
+    
+    while (usedIds.includes(nextId)) {
+      nextId++;
+    }
+    
+    res.json({ nextId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
 // WebSocket para recibir confirmación del ESP32
 io.on("connection", (socket) => {
   console.log("Cliente conectado a WebSockets");
