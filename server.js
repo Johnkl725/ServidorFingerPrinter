@@ -13,8 +13,8 @@ const io = new Server(server, {
     origin: "*",
     methods: ["GET", "POST"],
   },
-  pingInterval: 25000, // Evita que Render cierre la conexión
-  pingTimeout: 60000, // Aumenta el tiempo de espera para evitar desconexiones
+  pingInterval: 10000, // Reducido para mantener la conexión viva en Render
+  pingTimeout: 60000, // Tiempo de espera para evitar desconexiones
 });
 
 const port = process.env.PORT || 3000;
@@ -48,14 +48,18 @@ app.post("/verify-fingerprint", async (req, res) => {
 
     if (result.rows.length > 0) {
       const user = result.rows[0];
-      io.emit("fingerprint-verified", { message: "Acceso permitido", id: user.id, name: user.name });
+      io.emit("fingerprint-verified", { 
+        message: "Acceso permitido", 
+        id: user.id, 
+        name: user.name 
+      });
       res.json({ message: "Acceso permitido", id: user.id, name: user.name });
     } else {
       io.emit("fingerprint-verified", { message: "Acceso denegado" });
       res.json({ message: "Acceso denegado" });
     }
   } catch (err) {
-    console.error(err);
+    console.error("Error en verify-fingerprint:", err);
     res.status(500).json({ message: "Error del servidor" });
   }
 });
@@ -70,7 +74,7 @@ app.post("/register-user", async (req, res) => {
     );
     res.json({ message: "Usuario registrado con éxito" });
   } catch (err) {
-    console.error(err);
+    console.error("Error en register-user:", err);
     res.status(500).json({ message: "Error al registrar usuario" });
   }
 });
@@ -79,21 +83,26 @@ app.post("/register-user", async (req, res) => {
 app.delete("/delete-fingerprint/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await client.query("DELETE FROM fingerregister.users WHERE fingerprint_id = $1", [id]);
+    const result = await client.query(
+      "DELETE FROM fingerregister.users WHERE fingerprint_id = $1",
+      [id]
+    );
 
     if (result.rowCount > 0) {
-      res.json({ message: `Huella con ID ${id} eliminada con éxito` });
+      res.json({ message: `Huella con ID ${id} eliminada con éxito` }); // Corrección de sintaxis
     } else {
       res.status(404).json({ message: "Huella no encontrada" });
     }
   } catch (err) {
-    console.error(err);
+    console.error("Error en delete-fingerprint:", err);
     res.status(500).json({ message: "Error al eliminar huella" });
   }
 });
-// Nueva ruta para iniciar el enrolamiento
+
+// Ruta para iniciar el enrolamiento
 app.post("/start-enroll", async (req, res) => {
   try {
+    console.log("Enviando evento start-enroll al ESP32");
     io.emit("start-enroll"); // Notifica al ESP32 para iniciar el enrolamiento
     res.json({ message: "Esperando huella..." });
   } catch (err) {
@@ -102,7 +111,7 @@ app.post("/start-enroll", async (req, res) => {
   }
 });
 
-// Añadir esta nueva ruta en server.js
+// Ruta para obtener el próximo ID disponible
 app.get("/get-available-id", async (req, res) => {
   try {
     const result = await client.query(
@@ -118,37 +127,53 @@ app.get("/get-available-id", async (req, res) => {
     
     res.json({ nextId });
   } catch (err) {
-    console.error(err);
+    console.error("Error en get-available-id:", err);
     res.status(500).json({ message: "Error del servidor" });
   }
 });
 
-// WebSocket para recibir confirmación del ESP32
+// WebSocket para manejar eventos del ESP32
 io.on("connection", (socket) => {
-  console.log("Cliente conectado a WebSockets");
+  console.log("Cliente conectado a WebSockets:", socket.id);
 
-  socket.on("fingerprint-saved", async (data) => {
-    console.log("Huella registrada:", data);
+  socket.on("connect", () => {
+    console.log("Cliente confirmó conexión:", socket.id);
+  });
 
-    try {
-      await client.query(
-        "INSERT INTO fingerregister.users (name, fingerprint_id) VALUES ($1, $2)",
-        [data.name, data.fingerprintId]
-      );
-      io.emit("fingerprint-registered", { message: "Huella registrada con éxito" });
-    } catch (err) {
-      console.error("Error al guardar en la base de datos:", err);
-      io.emit("fingerprint-registered", { message: "Error al registrar huella" });
-    }
+  socket.on("fingerprint-registered", (data) => {
+    console.log("Huella registrada desde ESP32:", data);
+    io.emit("fingerprint-registered", { 
+      message: data.success ? "Huella registrada con éxito" : "Error al registrar",
+      id: data.id 
+    });
+  });
+
+  socket.on("fingerprint-verified", (data) => {
+    console.log("Verificación desde ESP32:", data);
+    io.emit("fingerprint-verified", { 
+      message: data.success ? "Acceso permitido" : "Acceso denegado",
+      id: data.success ? data.id : null 
+    });
+  });
+
+  socket.on("delete-complete", (data) => {
+    console.log("Borrado desde ESP32:", data);
+    io.emit("delete-complete", { 
+      message: data.success ? "Huella eliminada con éxito" : "Error al eliminar",
+      id: data.id 
+    });
   });
 
   socket.on("disconnect", () => {
-    console.log("Cliente desconectado");
+    console.log("Cliente desconectado:", socket.id);
+  });
+
+  socket.on("error", (err) => {
+    console.error("Error en Socket.IO:", err);
   });
 });
 
-
 // Iniciar el servidor
 server.listen(port, () => {
-  console.log(`Servidor corriendo en http://localhost:${port}`);
+  console.log(`Servidor corriendo en puerto ${port}`);
 });
