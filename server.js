@@ -36,6 +36,22 @@ client
   .then(() => console.log("Conectado a PostgreSQL en la nube"))
   .catch((err) => console.error("Error de conexión", err.stack));
 
+  app.get('/get-action', (req, res) => {
+    // Lógica para determinar la acción (puede venir del frontend)
+    res.json({ action: "none" }); // "enroll", "verify", "delete" con "id" si aplica
+});
+
+app.get('/get-next-id', async (req, res) => {
+    const result = await client.query("SELECT fingerprint_id FROM fingerregister.users ORDER BY fingerprint_id");
+    let nextId = 1;
+    for (let row of result.rows) {
+        if (row.fingerprint_id != nextId) break;
+        nextId++;
+    }
+    res.json({ nextId: nextId });
+});
+
+
 // Ruta para verificar huella
 app.post("/verify-fingerprint", async (req, res) => {
   const { fingerprintId } = req.body;
