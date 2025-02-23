@@ -102,8 +102,6 @@ app.post("/start-enroll", async (req, res) => {
   }
 });
 
-
-
 // WebSocket para recibir confirmación del ESP32
 io.on("connection", (socket) => {
   console.log("Cliente conectado a WebSockets");
@@ -133,4 +131,3 @@ io.on("connection", (socket) => {
 server.listen(port, () => {
   console.log(`Servidor corriendo en http://localhost:${port}`);
 });
-
