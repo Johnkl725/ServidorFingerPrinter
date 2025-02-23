@@ -134,6 +134,21 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Handler for start-verify event
+  socket.on("start-verify", () => {
+    console.log("📥 Evento 'start-verify' recibido del cliente");
+
+    // Trigger the fingerprint verification process here
+    // For now, we will emit an event back to the client
+    socket.emit("verify-started", { message: "Verificación de huella iniciada..." });
+
+    // If you need to interact with the database or some other logic, you can do so here
+    // Example:
+    // await client.query("SELECT * FROM ...");
+
+    // You could also trigger an event to start verifying the fingerprint from the sensor or any other process.
+  });
+
   socket.on("disconnect", () => {
     console.log("Cliente desconectado");
   });
