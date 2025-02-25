@@ -2,7 +2,6 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const bodyParser = require("body-parser");
-const { Client } = require("pg");
 const cors = require("cors");
 require("dotenv").config();
 
@@ -13,8 +12,8 @@ const io = new Server(server, {
     origin: "*",
     methods: ["GET", "POST"],
   },
-  pingInterval: 25000, // Evita que Render cierre la conexión
-  pingTimeout: 60000, // Aumenta el tiempo de espera para evitar desconexiones
+  pingInterval: 25000,
+  pingTimeout: 60000,
 });
 
 const port = process.env.PORT || 3000;
@@ -23,139 +22,76 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// Conexión a PostgreSQL
-const client = new Client({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
+let esp32Ip = ""; // 📡 Guardar la última IP del ESP32
 
-client
-  .connect()
-  .then(() => console.log("Conectado a PostgreSQL en la nube"))
-  .catch((err) => console.error("Error de conexión", err.stack));
-
-// Ruta para verificar huella
-app.post("/verify-fingerprint", async (req, res) => {
-  const { fingerprintId } = req.body;
-
-  try {
-    const result = await client.query(
-      "SELECT * FROM fingerregister.users WHERE fingerprint_id = $1",
-      [fingerprintId]
-    );
-
-    if (result.rows.length > 0) {
-      const user = result.rows[0];
-      io.emit("fingerprint-verified", { message: "Acceso permitido", id: user.id, name: user.name });
-      res.json({ message: "Acceso permitido", id: user.id, name: user.name });
-    } else {
-      io.emit("fingerprint-verified", { message: "Acceso denegado" });
-      res.json({ message: "Acceso denegado" });
-    }
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error del servidor" });
+// 📌 📡 Ruta para obtener la IP del ESP32 (para React)
+app.get("/esp32-ip", (req, res) => {
+  if (esp32Ip) {
+    res.json({ esp32_ip: esp32Ip });
+  } else {
+    res.status(404).json({ error: "ESP32 no conectado" });
   }
 });
 
-// Ruta para registrar nuevos usuarios
-app.post("/register-user", async (req, res) => {
-  const { name, fingerprintId } = req.body;
-  try {
-    await client.query(
-      "INSERT INTO fingerregister.users (name, fingerprint_id) VALUES ($1, $2)",
-      [name, fingerprintId]
-    );
-    res.json({ message: "Usuario registrado con éxito" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error al registrar usuario" });
-  }
-});
-
-// Ruta para eliminar huella
-app.delete("/delete-fingerprint/:id", async (req, res) => {
-  const { id } = req.params;
-  try {
-    const result = await client.query("DELETE FROM fingerregister.users WHERE fingerprint_id = $1", [id]);
-
-    
-    
-    if (result.rowCount > 0) {
-      res.json({ message: `Huella con ID ${id} eliminada con éxito` });
-    } else {
-      res.status(404).json({ message: "Huella no encontrada" });
-    }
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error al eliminar huella" });
-  }
-});
-// Nueva ruta para iniciar el enrolamiento
-app.post("/start-enroll", async (req, res) => {
-  try {
-    io.emit("start-enroll"); // Notifica al ESP32 para iniciar el enrolamiento
-    res.json({ message: "Esperando huella..." });
-  } catch (err) {
-    console.error("Error al iniciar enrolamiento:", err);
-    res.status(500).json({ message: "Error en el servidor" });
-  }
-});
-// Nueva ruta para iniciar la verificación
-app.post("/start-verify", async (req, res) => {
-  try {
-    io.emit("start-verify"); // Notifica al ESP32 para iniciar la verificación
-    res.json({ message: "Esperando verificación de huella..." });
-  } catch (err) {
-    console.error("Error al iniciar verificación:", err);
-    res.status(500).json({ message: "Error en el servidor" });
-  }
-});
-
-
-// WebSocket para recibir confirmación del ESP32
+// 📡 📌 WebSocket para conectar ESP32 y el frontend
 io.on("connection", (socket) => {
-  console.log("Cliente conectado a WebSockets");
+  console.log("🔗 Cliente conectado al WebSocket");
 
-  socket.on("fingerprint-saved", async (data) => {
-    console.log("Huella registrada:", data);
-
-    try {
-      await client.query(
-        "INSERT INTO fingerregister.users (name, fingerprint_id) VALUES ($1, $2)",
-        [data.name, data.fingerprintId]
-      );
-      io.emit("fingerprint-registered", { message: "Huella registrada con éxito" });
-    } catch (err) {
-      console.error("Error al guardar en la base de datos:", err);
-      io.emit("fingerprint-registered", { message: "Error al registrar huella" });
+  // 📌 Guardar la IP del ESP32 y enviarla al frontend
+  socket.on("esp32-ip", (data) => {
+    if (data.esp32_ip) {
+      console.log("🌐 IP del ESP32 recibida:", data.esp32_ip);
+      esp32Ip = data.esp32_ip; // Guardar la IP
+      io.emit("esp32-ip", { esp32_ip: esp32Ip }); // Enviar la IP a todos los clientes
     }
   });
 
-  // Handler for start-verify event
+  // 📡 📌 Redirigir eventos del frontend al ESP32
   socket.on("start-verify", () => {
-    console.log("📥 Evento 'start-verify' recibido del cliente");
+    console.log("📤 Enviando 'start-verify' al ESP32...");
+    io.emit("start-verify");
+  });
 
-    // Trigger the fingerprint verification process here
-    // For now, we will emit an event back to the client
-    socket.emit("verify-started", { message: "Verificación de huella iniciada..." });
+  socket.on("start-enroll", (data) => {
+    if (data && data.id) {
+      console.log(`📤 Enviando 'enroll_id_${data.id}' al ESP32`);
+      io.emit(`enroll_id_${data.id}`);
+    } else {
+      console.log("⚠️ Error: No se recibió un ID válido para enrolamiento.");
+    }
+  });
 
-    // If you need to interact with the database or some other logic, you can do so here
-    // Example:
-    // await client.query("SELECT * FROM ...");
+  socket.on("delete-fingerprint", (data) => {
+    if (data && data.id) {
+      console.log(`🗑 Enviando 'delete_id_${data.id}' al ESP32`);
+      io.emit(`delete_id_${data.id}`);
+    } else {
+      console.log("⚠️ Error: No se recibió un ID válido para eliminar.");
+    }
+  });
 
-    // You could also trigger an event to start verifying the fingerprint from the sensor or any other process.
+  // 📌 Respuestas del ESP32 al frontend
+  socket.on("fingerprint-verified", (data) => {
+    console.log("📥 Respuesta de verificación:", data);
+    io.emit("fingerprint-verified", data);
+  });
+
+  socket.on("fingerprint-registered", (data) => {
+    console.log("📥 Respuesta de registro:", data);
+    io.emit("fingerprint-registered", data);
+  });
+
+  socket.on("fingerprint-deleted", (data) => {
+    console.log("📥 Respuesta de eliminación:", data);
+    io.emit("fingerprint-deleted", data);
   });
 
   socket.on("disconnect", () => {
-    console.log("Cliente desconectado");
+    console.log("❌ Cliente desconectado");
   });
 });
 
-
 // Iniciar el servidor
 server.listen(port, () => {
-  console.log(`Servidor corriendo en http://localhost:${port}`);
+  console.log(`🚀 Servidor corriendo en http://localhost:${port}`);
 });
